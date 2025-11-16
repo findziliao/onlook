@@ -4,6 +4,7 @@ import { NodeFsProvider, type NodeFsProviderOptions } from './providers/nodefs';
 export * from './providers';
 export { CodesandboxProvider } from './providers/codesandbox';
 export { NodeFsProvider } from './providers/nodefs';
+export type { NodeFsBridge } from './providers/nodefs';
 export * from './types';
 
 export interface CreateClientOptions {

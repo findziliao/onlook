@@ -37,10 +37,10 @@ export class SandboxManager {
     }
 
     async init() {
-        // Start connection asynchronously (don't wait)
+        // Start local NodeFs session asynchronously (don't wait)
         if (!this.session.provider) {
-            this.session.start(this.branch.sandbox.id).catch(err => {
-                console.error('[SandboxManager] Initial connection failed:', err);
+            this.session.startLocal().catch((err) => {
+                console.error('[SandboxManager] Initial local connection failed:', err);
                 // Don't throw - let reaction handle retries/reconnects
             });
         }

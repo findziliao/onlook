@@ -51,7 +51,31 @@ import {
     type WriteFileOutput,
 } from '../../types';
 
-export interface NodeFsProviderOptions {}
+/**
+ * Bridge interface that allows NodeFsProvider to delegate actual filesystem and
+ * command operations to an environment-specific implementation (e.g. a Next.js
+ * API route, tRPC router, or local Node process).
+ *
+ * This keeps @onlook/code-provider free of direct Node.js or browser APIs.
+ */
+export interface NodeFsBridge {
+    writeFile(args: WriteFileInput['args']): Promise<void>;
+    readFile(args: ReadFileInput['args']): Promise<ReadFileOutput>;
+    listFiles(args: ListFilesInput['args']): Promise<ListFilesOutput>;
+    deleteFiles(args: DeleteFilesInput['args']): Promise<void>;
+    createDirectory(args: CreateDirectoryInput['args']): Promise<void>;
+    renameFile(args: RenameFileInput['args']): Promise<void>;
+    statFile(args: StatFileInput['args']): Promise<StatFileOutput>;
+    copyFiles?(args: CopyFilesInput['args']): Promise<void>;
+    downloadFiles?(args: DownloadFilesInput['args']): Promise<DownloadFilesOutput>;
+    watchFiles?(input: WatchFilesInput): Promise<WatchFilesOutput>;
+    runCommand?(args: TerminalCommandInput['args']): Promise<TerminalCommandOutput>;
+    gitStatus?(): Promise<GitStatusOutput>;
+}
+
+export interface NodeFsProviderOptions {
+    bridge?: NodeFsBridge;
+}
 
 export class NodeFsProvider extends Provider {
     private readonly options: NodeFsProviderOptions;
@@ -61,116 +85,126 @@ export class NodeFsProvider extends Provider {
         this.options = options;
     }
 
-    async initialize(input: InitializeInput): Promise<InitializeOutput> {
+    private get bridge(): NodeFsBridge {
+        if (!this.options.bridge) {
+            throw new Error('NodeFsProvider bridge is not configured');
+        }
+        return this.options.bridge;
+    }
+
+    async initialize(_input: InitializeInput): Promise<InitializeOutput> {
         return {};
     }
 
     async writeFile(input: WriteFileInput): Promise<WriteFileOutput> {
+        await this.bridge.writeFile(input.args);
         return {
             success: true,
         };
     }
 
     async renameFile(input: RenameFileInput): Promise<RenameFileOutput> {
+        await this.bridge.renameFile(input.args);
         return {};
     }
 
     async statFile(input: StatFileInput): Promise<StatFileOutput> {
-        return {
-            type: 'file',
-        };
+        return this.bridge.statFile(input.args);
     }
 
     async deleteFiles(input: DeleteFilesInput): Promise<DeleteFilesOutput> {
+        await this.bridge.deleteFiles(input.args);
         return {};
     }
 
     async listFiles(input: ListFilesInput): Promise<ListFilesOutput> {
-        return {
-            files: [],
-        };
+        return this.bridge.listFiles(input.args);
     }
 
     async readFile(input: ReadFileInput): Promise<ReadFileOutput> {
-        return {
-            file: {
-                path: input.args.path,
-                content: '',
-                type: 'text',
-                toString: () => {
-                    return '';
-                },
-            },
-        };
+        return this.bridge.readFile(input.args);
     }
 
     async downloadFiles(input: DownloadFilesInput): Promise<DownloadFilesOutput> {
-        return {
-            url: '',
-        };
+        if (!this.bridge.downloadFiles) {
+            return { url: undefined };
+        }
+        return this.bridge.downloadFiles(input.args);
     }
 
     async copyFiles(input: CopyFilesInput): Promise<CopyFileOutput> {
+        if (this.bridge.copyFiles) {
+            await this.bridge.copyFiles(input.args);
+        }
         return {};
     }
 
     async createDirectory(input: CreateDirectoryInput): Promise<CreateDirectoryOutput> {
+        await this.bridge.createDirectory(input.args);
         return {};
     }
 
     async watchFiles(input: WatchFilesInput): Promise<WatchFilesOutput> {
-        return {
-            watcher: new NodeFsFileWatcher(),
-        };
+        if (!this.bridge.watchFiles) {
+            return {
+                watcher: new NodeFsFileWatcher(),
+            };
+        }
+        return this.bridge.watchFiles(input);
     }
 
-    async createTerminal(input: CreateTerminalInput): Promise<CreateTerminalOutput> {
+    async createTerminal(_input: CreateTerminalInput): Promise<CreateTerminalOutput> {
         return {
             terminal: new NodeFsTerminal(),
         };
     }
 
-    async getTask(input: GetTaskInput): Promise<GetTaskOutput> {
+    async getTask(_input: GetTaskInput): Promise<GetTaskOutput> {
         return {
             task: new NodeFsTask(),
         };
     }
 
     async runCommand(input: TerminalCommandInput): Promise<TerminalCommandOutput> {
-        return {
-            output: '',
-        };
+        if (!this.bridge.runCommand) {
+            return {
+                output: '',
+            };
+        }
+        return this.bridge.runCommand(input.args);
     }
 
     async runBackgroundCommand(
-        input: TerminalBackgroundCommandInput,
+        _input: TerminalBackgroundCommandInput,
     ): Promise<TerminalBackgroundCommandOutput> {
         return {
             command: new NodeFsCommand(),
         };
     }
 
-    async gitStatus(input: GitStatusInput): Promise<GitStatusOutput> {
-        return {
-            changedFiles: [],
-        };
+    async gitStatus(_input: GitStatusInput): Promise<GitStatusOutput> {
+        if (!this.bridge.gitStatus) {
+            return {
+                changedFiles: [],
+            };
+        }
+        return this.bridge.gitStatus();
     }
 
-    async setup(input: SetupInput): Promise<SetupOutput> {
+    async setup(_input: SetupInput): Promise<SetupOutput> {
         return {};
     }
 
-    async createSession(input: CreateSessionInput): Promise<CreateSessionOutput> {
+    async createSession(_input: CreateSessionInput): Promise<CreateSessionOutput> {
         return {};
     }
 
     async reload(): Promise<boolean> {
-        // TODO: Implement
         return true;
     }
 
     async reconnect(): Promise<void> {
-        // TODO: Implement
+        // Intentionally a no-op for now; reconnection semantics are handled by the bridge.
     }
 
     async ping(): Promise<boolean> {
@@ -183,27 +217,27 @@ export class NodeFsProvider extends Provider {
         };
     }
 
-    static async createProjectFromGit(input: {
+    static async createProjectFromGit(_input: {
         repoUrl: string;
         branch: string;
     }): Promise<CreateProjectOutput> {
         throw new Error('createProjectFromGit not implemented for NodeFs provider');
     }
 
-    async pauseProject(input: PauseProjectInput): Promise<PauseProjectOutput> {
+    async pauseProject(_input: PauseProjectInput): Promise<PauseProjectOutput> {
         return {};
     }
 
-    async stopProject(input: StopProjectInput): Promise<StopProjectOutput> {
+    async stopProject(_input: StopProjectInput): Promise<StopProjectOutput> {
         return {};
     }
 
-    async listProjects(input: ListProjectsInput): Promise<ListProjectsOutput> {
+    async listProjects(_input: ListProjectsInput): Promise<ListProjectsOutput> {
         return {};
     }
 
     async destroy(): Promise<void> {
-        // TODO: Implement
+        // Bridge implementations may hold resources; they can expose their own cleanup if needed.
     }
 }
 

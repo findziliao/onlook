@@ -10,7 +10,6 @@ import { useState } from 'react';
 import { ChatTab } from './chat-tab';
 import { ChatControls } from './chat-tab/controls';
 import { ChatHistory } from './chat-tab/history';
-import { ChatPanelDropdown } from './chat-tab/panel-dropdown';
 
 export const RightPanel = observer(() => {
     const editorEngine = useEditorEngine();
@@ -32,18 +31,15 @@ export const RightPanel = observer(() => {
             >
                 <div className='flex flex-col h-full'>
                     <div className="flex flex-row p-1 w-full h-10 border-b border-border ">
-                        <ChatPanelDropdown
-                            isChatHistoryOpen={isChatHistoryOpen}
-                            setIsChatHistoryOpen={setIsChatHistoryOpen}
+                        <button
+                            type="button"
+                            className="flex items-center gap-1.5 bg-transparent p-1 px-2 text-sm text-foreground-secondary hover:text-foreground-primary cursor-pointer group"
+                            onClick={() => setIsChatHistoryOpen((open) => !open)}
                         >
-                            <div
-                                className="flex items-center gap-1.5 bg-transparent p-1 px-2 text-sm text-foreground-secondary hover:text-foreground-primary cursor-pointer group"
-                            >
-                                <Icons.Sparkles className="mr-0.5 mb-0.5 h-4 w-4" />
-                                {t(transKeys.editor.panels.edit.tabs.chat.name)}
-                                <Icons.ChevronDown className="ml-0.5 h-3 w-3 text-muted-foreground group-hover:text-foreground-primary" />
-                            </div>
-                        </ChatPanelDropdown>
+                            <Icons.Sparkles className="mr-0.5 mb-0.5 h-4 w-4" />
+                            {t(transKeys.editor.panels.edit.tabs.chat.name)}
+                            <Icons.ChevronDown className="ml-0.5 h-3 w-3 text-muted-foreground group-hover:text-foreground-primary" />
+                        </button>
                         <div className='ml-auto'>
                             <ChatControls />
                         </div>

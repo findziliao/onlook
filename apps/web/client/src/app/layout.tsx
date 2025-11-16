@@ -5,7 +5,6 @@ import RB2BLoader from '@/components/rb2b-loader';
 import { TelemetryProvider } from '@/components/telemetry-provider';
 import { env } from '@/env';
 import { FeatureFlagsProvider } from '@/hooks/use-feature-flags';
-import { TRPCReactProvider } from '@/trpc/react';
 import { Toaster } from '@onlook/ui/sonner';
 import { type Metadata } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
@@ -13,7 +12,6 @@ import { getLocale } from 'next-intl/server';
 import { Inter } from 'next/font/google';
 import Script from 'next/script';
 import { ThemeProvider } from './_components/theme';
-import { AuthProvider } from './auth/auth-context';
 import { faqSchema, organizationSchema } from './seo';
 
 const isProduction = env.NODE_ENV === 'production';
@@ -78,25 +76,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                         <RB2BLoader />
                     </>
                 )}
-                <TRPCReactProvider>
-                    <FeatureFlagsProvider>
-                        <TelemetryProvider>
-                            <ThemeProvider
-                                attribute="class"
-                                forcedTheme="dark"
-                                enableSystem
-                                disableTransitionOnChange
-                            >
-                                <AuthProvider>
-                                    <NextIntlClientProvider>
-                                        {children}
-                                        <Toaster />
-                                    </NextIntlClientProvider>
-                                </AuthProvider>
-                            </ThemeProvider>
-                        </TelemetryProvider>
-                    </FeatureFlagsProvider>
-                </TRPCReactProvider>
+                <FeatureFlagsProvider>
+                    <TelemetryProvider>
+                        <ThemeProvider
+                            attribute="class"
+                            forcedTheme="dark"
+                            enableSystem
+                            disableTransitionOnChange
+                        >
+                            <NextIntlClientProvider>
+                                {children}
+                                <Toaster />
+                            </NextIntlClientProvider>
+                        </ThemeProvider>
+                    </TelemetryProvider>
+                </FeatureFlagsProvider>
             </body>
         </html>
     );

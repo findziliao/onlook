@@ -1,6 +1,4 @@
 import type { IFrameView } from '@/app/project/[id]/_components/canvas/frame/view';
-import { api } from '@/trpc/client';
-import { toDbFrame, toDbPartialFrame } from '@onlook/db';
 import { type Frame } from '@onlook/models';
 import { calculateNonOverlappingPosition } from '@onlook/utility';
 import { debounce } from 'lodash';
@@ -196,27 +194,12 @@ export class FramesManager {
             return;
         }
 
-        const success = await api.frame.delete.mutate({
-            frameId: frameData.frame.id,
-        });
-
-        if (success) {
-            this.disposeFrame(frameData.frame.id);
-        } else {
-            console.error('Failed to delete frame');
-        }
+        this.disposeFrame(frameData.frame.id);
     }
 
     async create(frame: Frame) {
-        const success = await api.frame.create.mutate(
-            toDbFrame(roundDimensions(frame)),
-        );
-
-        if (success) {
-            this._frameIdToData.set(frame.id, { frame, view: null, selected: false });
-        } else {
-            console.error('Failed to create frame');
-        }
+        const newFrame = roundDimensions(frame);
+        this._frameIdToData.set(newFrame.id, { frame: newFrame, view: null, selected: false });
     }
 
     async duplicate(id: string) {
@@ -263,19 +246,10 @@ export class FramesManager {
     saveToStorage = debounce(this.undebouncedSaveToStorage.bind(this), 1000);
 
     async undebouncedSaveToStorage(frameId: string, frame: Partial<Frame>) {
-        try {
-            const frameToUpdate = toDbPartialFrame(frame);
-            const success = await api.frame.update.mutate({
-                ...frameToUpdate,
-                id: frameId,
-            });
-
-            if (!success) {
-                console.error('Failed to update frame');
-            }
-        } catch (error) {
-            console.error('Failed to update frame', error);
-        }
+        // In pure local mode, frame layout is kept in memory only.
+        // Persisting to a remote store is disabled.
+        void frameId;
+        void frame;
     }
 
     canDelete() {

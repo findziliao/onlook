@@ -1,4 +1,3 @@
-import { api } from '@/trpc/client';
 import { CodeFileSystem } from '@onlook/file-system';
 import type { Branch, RouterType } from '@onlook/models';
 import { toast } from '@onlook/ui/sonner';
@@ -155,94 +154,13 @@ export class BranchManager {
     }
 
     async forkBranch(branchId: string): Promise<void> {
-        if (!branchId) {
-            throw new Error('No active branch to fork');
-        }
-
-        const branch = this.getBranchById(branchId);
-        if (!branch) {
-            throw new Error('Branch not found');
-        }
-
-        try {
-            toast.loading(`Forking branch "${branch.name}"...`);
-            // Call the fork API
-            const result = await api.branch.fork.mutate({ branchId });
-
-            // Add the new branch to the local branch map
-            const branchData = this.createBranchData(result.branch);
-            await branchData.codeEditor.initialize();
-            await branchData.sandbox.init();
-
-            // Add the created frames to the frame manager
-            if (result.frames && result.frames.length > 0) {
-                this.editorEngine.frames.applyFrames(result.frames);
-            }
-
-            // Switch to the new branch
-            await this.switchToBranch(result.branch.id);
-        } catch (error) {
-            console.error('Failed to fork branch:', error);
-            toast.error('Failed to fork branch');
-            throw error;
-        } finally {
-            toast.dismiss();
-        }
+        toast.error('Branch forking is not available in local-only mode');
+        throw new Error('forkBranch is disabled in local-only mode');
     }
 
     async createBlankSandbox(branchName?: string): Promise<void> {
-        try {
-            toast.loading('Creating blank sandbox...');
-            // Get current active frame for positioning
-            const activeFrames = this.editorEngine.frames.selected;
-            const activeFrame = activeFrames.length > 0 ? activeFrames[0] : this.editorEngine.frames.getAll()[0];
-
-            let framePosition;
-            if (activeFrame) {
-                const frame = activeFrame.frame;
-                framePosition = {
-                    x: frame.position.x,
-                    y: frame.position.y,
-                    width: frame.dimension.width,
-                    height: frame.dimension.height,
-                };
-            }
-
-            // Get current project ID from existing branches
-            const currentBranches = Array.from(this.branchMap.values());
-            if (currentBranches.length === 0) {
-                throw new Error('No project context available');
-            }
-            const projectId = currentBranches[0]!.branch.projectId;
-
-            // Call the createBlank API
-            const result = await api.branch.createBlank.mutate({
-                projectId,
-                branchName,
-                framePosition,
-            });
-
-            const routerConfig = await this.activeSandbox.getRouterConfig();
-
-            // Add the new branch to the local branch map
-            const branchData = this.createBranchData(result.branch, routerConfig?.type);
-            await branchData.codeEditor.initialize();
-            await branchData.sandbox.init();
-
-            // Add the created frames to the frame manager
-            if (result.frames && result.frames.length > 0) {
-                this.editorEngine.frames.applyFrames(result.frames);
-            }
-
-            // Switch to the new branch
-            await this.switchToBranch(result.branch.id);
-        } catch (error) {
-            console.error('Failed to create blank sandbox:', error);
-            toast.error('Failed to create blank sandbox');
-            throw error;
-        } finally {
-            toast.dismiss();
-        }
+        toast.error('Creating blank sandboxes is not available in local-only mode');
+        throw new Error('createBlankSandbox is disabled in local-only mode');
     }
 
     async updateBranch(branchId: string, updates: Partial<Branch>): Promise<void> {
@@ -251,22 +169,8 @@ export class BranchManager {
             throw new Error('Branch not found');
         }
 
-        try {
-            const success = await api.branch.update.mutate({
-                id: branchId,
-                ...updates,
-            });
-
-            if (success) {
-                // Update local branch state
-                Object.assign(branchData.branch, updates);
-            } else {
-                throw new Error('Failed to update branch');
-            }
-        } catch (error) {
-            console.error('Failed to update branch:', error);
-            throw error;
-        }
+        // In local-only mode we only update the in-memory branch representation.
+        Object.assign(branchData.branch, updates);
     }
 
     async removeBranch(branchId: string): Promise<void> {

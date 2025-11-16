@@ -1,17 +1,46 @@
-import { api } from '@/trpc/react';
 import { Icons } from '@onlook/ui/icons/index';
 import { ChatTabContent } from './chat-tab-content';
+import { useEditorEngine } from '@/components/store/editor';
+import { observer } from 'mobx-react-lite';
+import { useEffect, useState } from 'react';
+import type { ChatMessage } from '@onlook/models';
 
 interface ChatTabProps {
     conversationId: string;
     projectId: string;
 }
 
-export const ChatTab = ({ conversationId, projectId }: ChatTabProps) => {
-    const { data: initialMessages, isLoading } = api.chat.message.getAll.useQuery(
-        { conversationId: conversationId },
-        { enabled: !!conversationId },
-    );
+export const ChatTab = observer(({ conversationId, projectId }: ChatTabProps) => {
+    const editorEngine = useEditorEngine();
+    const [isLoading, setIsLoading] = useState(true);
+    const [initialMessages, setInitialMessages] = useState<ChatMessage[] | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        setIsLoading(true);
+        (async () => {
+            try {
+                const stored = await editorEngine.chat.conversation.getConversations(projectId);
+                const current = stored.find((c) => c.id === conversationId);
+                // For now we do not persist message history; start with empty array.
+                if (!cancelled) {
+                    setInitialMessages([]);
+                }
+            } catch (error) {
+                console.error('Failed to load initial messages for conversation', error);
+                if (!cancelled) {
+                    setInitialMessages([]);
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsLoading(false);
+                }
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [conversationId, projectId, editorEngine.chat.conversation]);
 
     if (!initialMessages || isLoading) {
         return (
@@ -31,4 +60,4 @@ export const ChatTab = ({ conversationId, projectId }: ChatTabProps) => {
             initialMessages={initialMessages}
         />
     );
-};
+});

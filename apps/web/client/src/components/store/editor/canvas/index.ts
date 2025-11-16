@@ -1,6 +1,4 @@
-import { api } from '@/trpc/client';
 import { DefaultSettings } from '@onlook/constants';
-import { DefaultDesktopFrame } from '@onlook/db';
 import type { Canvas, RectPosition } from '@onlook/models';
 import { debounce } from 'lodash';
 import { makeAutoObservable } from 'mobx';
@@ -23,15 +21,8 @@ export class CanvasManager {
     }
 
     getDefaultPanPosition(): RectPosition {
-        let x = 200;
-        let y = 100;
-        const center = false;
-        if (center) {
-            x = window.innerWidth / 2 - (Number(DefaultDesktopFrame.width) * this._scale) / 2;
-            y = window.innerHeight / 2 - (Number(DefaultDesktopFrame.height) * this._scale) / 2;
-        }
-
-        return { x, y };
+        // Simple, deterministic default pan position for local mode.
+        return { x: 200, y: 100 };
     }
 
     get id() {
@@ -57,25 +48,6 @@ export class CanvasManager {
 
     set position(value: RectPosition) {
         this._position = value;
-        this.saveCanvas();
-    }
-
-    // 5 second debounce. Database is used to save working state per user, so we don't need to save too often.
-    saveCanvas = debounce(this.undebouncedSaveCanvas, 5000);
-
-    private async undebouncedSaveCanvas() {
-        const success = await api.userCanvas.update.mutate({
-            projectId: this.editorEngine.projectId,
-            canvasId: this.id,
-            canvas: {
-                scale: this.scale.toString(),
-                x: this.position.x.toString(),
-                y: this.position.y.toString(),
-            },
-        });
-        if (!success) {
-            console.error('Failed to update canvas');
-        }
     }
 
     clear() {

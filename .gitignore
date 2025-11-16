@@ -47,3 +47,6 @@ mise.toml
 
 # Temporary files
 .tmp/
+bun.lock
+PROJECT_LOCAL_FORK_ZH.md
+PROJECT_OVERVIEW_ZH.md

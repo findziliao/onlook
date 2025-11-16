@@ -1,7 +1,6 @@
-import { api } from '@/trpc/client';
 import { type ChatConversation } from '@onlook/models';
+import localforage from 'localforage';
 import { makeAutoObservable } from 'mobx';
-import { toast } from 'sonner';
 import type { EditorEngine } from '../engine';
 
 interface CurrentConversation extends ChatConversation {
@@ -17,28 +16,12 @@ export class ConversationManager {
         makeAutoObservable(this);
     }
 
-    async applyConversations(conversations: ChatConversation[]) {
-        this.conversations = conversations;
-        if (conversations.length > 0 && conversations[0]) {
-            const conversation = conversations[0];
-            await this.selectConversation(conversation.id);
-        } else {
-            await this.startNewConversation();
-        }
-    }
-
     async getConversations(projectId: string): Promise<ChatConversation[]> {
-        const res: ChatConversation[] | null = await this.getConversationsFromStorage(projectId);
-        if (!res) {
-            console.error('No conversations found');
-            return [];
-        }
-        const conversations = res;
-
+        const conversations = await this.getConversationsFromStorage(projectId);
         const sorted = conversations.sort((a, b) => {
             return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
         });
-        return sorted || [];
+        return sorted;
     }
 
     setConversationLength(length: number) {
@@ -54,9 +37,10 @@ export class ConversationManager {
         try {
             this.creatingConversation = true;
             if (this.current?.messageCount === 0 && !this.current?.title) {
-                throw new Error('Current conversation is already empty.');
+                // Current conversation is already empty; no need to start a new one.
+                return;
             }
-            const newConversation = await api.chat.conversation.upsert.mutate({
+            const newConversation = await this.upsertConversationInStorage({
                 projectId: this.editorEngine.projectId,
             });
             this.current = {
@@ -66,9 +50,6 @@ export class ConversationManager {
             this.conversations.push(newConversation);
         } catch (error) {
             console.error('Error starting new conversation', error);
-            toast.error('Error starting new conversation.', {
-                description: error instanceof Error ? error.message : 'Unknown error',
-            });
         } finally {
             this.creatingConversation = false;
         }
@@ -114,10 +95,8 @@ export class ConversationManager {
             console.error('No conversation found');
             return;
         }
-        const title = await api.chat.conversation.generateTitle.mutate({
-            conversationId: this.current?.id,
-            content,
-        });
+        const title =
+            content?.split('\n')?.[0]?.slice(0, 80)?.trim() || 'Conversation';
         if (!title) {
             console.error('Error generating conversation title. No title returned.');
             return;
@@ -138,22 +117,75 @@ export class ConversationManager {
     }
 
     async getConversationsFromStorage(id: string): Promise<ChatConversation[] | null> {
-        return api.chat.conversation.getAll.query({ projectId: id });
+        const key = getStorageKey(id);
+        const stored = await localforage.getItem<ChatConversation[]>(key);
+        if (!stored) {
+            return [];
+        }
+        // Ensure Date instances for createdAt/updatedAt
+        return stored.map((conversation) => ({
+            ...conversation,
+            createdAt: new Date(conversation.createdAt),
+            updatedAt: new Date(conversation.updatedAt),
+        }));
     }
 
     async upsertConversationInStorage(conversation: Partial<ChatConversation>): Promise<ChatConversation> {
-        return await api.chat.conversation.upsert.mutate({
+        const projectId = this.editorEngine.projectId;
+        const key = getStorageKey(projectId);
+        const existing = await this.getConversationsFromStorage(projectId);
+        const now = new Date();
+
+        if (conversation.id) {
+            const index = existing.findIndex((c) => c.id === conversation.id);
+            if (index !== -1) {
+                const updated: ChatConversation = {
+                    ...existing[index]!,
+                    ...conversation,
+                    updatedAt: now,
+                } as ChatConversation;
+                existing[index] = updated;
+                await localforage.setItem(key, existing);
+                return updated;
+            }
+        }
+
+        const id = crypto.randomUUID();
+        const newConversation: ChatConversation = {
+            id,
+            projectId,
+            title: null,
+            createdAt: now,
+            updatedAt: now,
             ...conversation,
-            projectId: this.editorEngine.projectId,
-        });
+        } as ChatConversation;
+        const next = [...existing, newConversation];
+        await localforage.setItem(key, next);
+        return newConversation;
     }
 
     async updateConversationInStorage(conversation: Partial<ChatConversation> & { id: string }) {
-        await api.chat.conversation.update.mutate(conversation);
+        const projectId = this.editorEngine.projectId;
+        const key = getStorageKey(projectId);
+        const existing = await this.getConversationsFromStorage(projectId);
+        const index = existing.findIndex((c) => c.id === conversation.id);
+        if (index === -1) return;
+
+        const updated: ChatConversation = {
+            ...existing[index]!,
+            ...conversation,
+            updatedAt: new Date(),
+        };
+        existing[index] = updated;
+        await localforage.setItem(key, existing);
     }
 
     async deleteConversationInStorage(id: string) {
-        await api.chat.conversation.delete.mutate({ conversationId: id });
+        const projectId = this.editorEngine.projectId;
+        const key = getStorageKey(projectId);
+        const existing = await this.getConversationsFromStorage(projectId);
+        const next = existing.filter((c) => c.id !== id);
+        await localforage.setItem(key, next);
     }
 
     clear() {
@@ -161,3 +193,5 @@ export class ConversationManager {
         this.conversations = [];
     }
 }
+
+const getStorageKey = (projectId: string) => `onlook-local-conversations:${projectId}`;

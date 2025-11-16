@@ -1,4 +1,3 @@
-import { api } from "@/trpc/client";
 import { makeAutoObservable } from "mobx";
 import type { EditorEngine } from "../engine";
 import type { ChatMessage } from "@onlook/models";
@@ -12,9 +11,9 @@ export class ApiManager {
         query: string,
         allowed_domains: string[] | undefined,
         blocked_domains: string[] | undefined
-    }) {
-        const result = await api.utils.webSearch.mutate(input);
-        return result;
+    }): Promise<never> {
+        console.warn("webSearch is disabled in local-only mode", input);
+        throw new Error("webSearch is not available in local-only mode");
     }
 
     async applyDiff(input: {
@@ -25,8 +24,9 @@ export class ApiManager {
             projectId: string;
             conversationId: string | undefined;
         }
-    }) {
-        return await api.utils.applyDiff.mutate(input);
+    }): Promise<never> {
+        console.warn("applyDiff is disabled in local-only mode", input);
+        throw new Error("applyDiff is not available in local-only mode");
     }
 
     async scrapeUrl(input: {
@@ -36,11 +36,13 @@ export class ApiManager {
         includeTags?: string[] | undefined;
         excludeTags?: string[] | undefined;
         waitFor?: number | undefined;
-    }) {
-        return await api.utils.scrapeUrl.mutate(input);
+    }): Promise<never> {
+        console.warn("scrapeUrl is disabled in local-only mode", input);
+        throw new Error("scrapeUrl is not available in local-only mode");
     }
 
     async getConversationMessages(conversationId: string): Promise<ChatMessage[]> {
-        return await api.chat.message.getAll.query({ conversationId });
+        console.warn("getConversationMessages is disabled in local-only mode", conversationId);
+        throw new Error("getConversationMessages is not available in local-only mode");
     }
 }

@@ -1,4 +1,3 @@
-import { api } from '@/trpc/client';
 import { isAfter, subMinutes } from 'date-fns';
 import { debounce } from 'lodash';
 import { makeAutoObservable } from 'mobx';
@@ -39,13 +38,12 @@ export class ScreenshotManager {
                     return;
                 }
             }
-            const result = await api.project.captureScreenshot.mutate({ projectId: this.editorEngine.projectId });
-            if (!result || !result.success) {
-                throw new Error('Failed to capture screenshot');
-            }
+            // In the local-only fork we do not persist screenshots
+            // to a backend. We simply record the last capture time
+            // to preserve rate limiting behaviour.
             this.lastScreenshotAt = new Date();
         } catch (error) {
-            console.error('Error capturing screenshot', error);
+            console.error('Error capturing screenshot (local-only mode)', error);
         } finally {
             this.isCapturing = false;
         }

@@ -1,5 +1,4 @@
 import { useEditorEngine } from '@/components/store/editor';
-import { api } from '@/trpc/react';
 import type { ChatSuggestion } from '@onlook/models';
 import { Icons } from '@onlook/ui/icons';
 import { observer } from 'mobx-react-lite';
@@ -24,14 +23,12 @@ export const Suggestions = observer(
         }
     >(({ suggestions, isStreaming, disabled, inputValue, setInput, onSuggestionFocus }, ref) => {
         const editorEngine = useEditorEngine();
-        const { data: settings } = api.user.settings.get.useQuery();
         const [focusedIndex, setFocusedIndex] = useState<number>(-1);
         const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
         const shouldHideSuggestions =
             suggestions.length === 0 ||
             isStreaming ||
-            !settings?.chat?.showSuggestions ||
             disabled ||
             inputValue.trim().length > 0 ||
             editorEngine.branches.getAllErrors().length > 0;

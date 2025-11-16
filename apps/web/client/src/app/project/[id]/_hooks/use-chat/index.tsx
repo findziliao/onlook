@@ -2,7 +2,6 @@
 
 import { useEditorEngine } from '@/components/store/editor';
 import { handleToolCall } from '@/components/tools';
-import { api } from '@/trpc/client';
 import { useChat as useAiChat } from '@ai-sdk/react';
 import { ChatType, type ChatMessage, type GitMessageCheckpoint, type MessageContext, type QueuedMessage } from '@onlook/models';
 import { jsonClone } from '@onlook/utility';
@@ -265,15 +264,6 @@ export function useChat({ conversationId, projectId, initialMessages }: UseChatP
                     checkpoints: [...oldCheckpoints, ...checkpoints],
                     context: lastUserMessage.metadata?.context ?? [],
                 };
-
-                // Save checkpoints to database (filter out legacy checkpoints without branchId)
-                const checkpointsWithBranchId = [...oldCheckpoints, ...checkpoints].filter(
-                    (cp): cp is GitMessageCheckpoint & { branchId: string } => !!cp.branchId
-                );
-                void api.chat.message.updateCheckpoints.mutate({
-                    messageId: lastUserMessage.id,
-                    checkpoints: checkpointsWithBranchId,
-                });
 
                 setMessages(
                     jsonClone(

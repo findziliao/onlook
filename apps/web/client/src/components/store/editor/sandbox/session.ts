@@ -1,5 +1,5 @@
-import { api } from '@/trpc/client';
 import { CodeProvider, createCodeProviderClient, type Provider } from '@onlook/code-provider';
+import { LocalFsBridge } from '@/services/local-fs/bridge';
 import type { Branch } from '@onlook/models';
 import { makeAutoObservable } from 'mobx';
 import type { ErrorManager } from '../error';
@@ -18,56 +18,13 @@ export class SessionManager {
         makeAutoObservable(this);
     }
 
-    async start(sandboxId: string, userId?: string): Promise<void> {
-        const MAX_RETRIES = 3;
-        const RETRY_DELAY_MS = 2000;
-
-        if (this.isConnecting || this.provider) {
-            return;
-        }
-
-        this.isConnecting = true;
-
-        const attemptConnection = async () => {
-            const provider = await createCodeProviderClient(CodeProvider.CodeSandbox, {
-                providerOptions: {
-                    codesandbox: {
-                        sandboxId,
-                        userId,
-                        initClient: true,
-                        getSession: async (sandboxId, userId) => {
-                            return api.sandbox.start.mutate({ sandboxId });
-                        },
-                    },
-                },
-            });
-
-            this.provider = provider;
-            await this.createTerminalSessions(provider);
-        };
-
-        let lastError: Error | null = null;
-
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-            try {
-                await attemptConnection();
-                this.isConnecting = false;
-                return;
-            } catch (error) {
-                lastError = error instanceof Error ? error : new Error(String(error));
-                console.error(`Failed to start sandbox session (attempt ${attempt + 1}/${MAX_RETRIES + 1}):`, error);
-
-                this.provider = null;
-
-                if (attempt < MAX_RETRIES) {
-                    console.log(`Retrying sandbox connection in ${RETRY_DELAY_MS}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-                }
-            }
-        }
-
-        this.isConnecting = false;
-        throw lastError;
+    /**
+     * Legacy entrypoint kept for compatibility with existing call sites.
+     * In the local-only fork we ignore sandbox identifiers and delegate
+     * to the NodeFs-based local session.
+     */
+    async start(_sandboxId: string, _userId?: string): Promise<void> {
+        await this.startLocal();
     }
 
     async restartDevServer(): Promise<boolean> {
@@ -141,14 +98,15 @@ export class SessionManager {
         }
     }
 
-    async hibernate(sandboxId: string) {
-        await api.sandbox.hibernate.mutate({ sandboxId });
+    async hibernate(_sandboxId: string) {
+        // No-op in local-only mode; there is no remote sandbox to hibernate.
     }
 
-    async reconnect(sandboxId: string, userId?: string) {
+    async reconnect(_sandboxId?: string, _userId?: string) {
         try {
             if (!this.provider) {
-                console.error('No provider found in reconnect');
+                // If there is no active provider, attempt to start a fresh local session.
+                await this.startLocal();
                 return;
             }
 
@@ -161,24 +119,57 @@ export class SessionManager {
             // Attempt soft reconnect
             await this.provider?.reconnect();
 
-            const isConnected2 = await this.ping();
-            if (isConnected2) {
+            const isConnectedAfterReconnect = await this.ping();
+            if (isConnectedAfterReconnect) {
                 return;
             }
-            await this.restartProvider(sandboxId, userId);
+
+            await this.restartProvider();
         } catch (error) {
             console.error('Failed to reconnect to sandbox', error);
+                this.isConnecting = false;
+        }
+    }
+
+    /**
+     * Local-only session initializer using the NodeFs provider.
+     * This does not contact CodeSandbox and instead talks to the
+     * `/api/local-fs` endpoint via LocalFsBridge.
+     *
+     * Call this instead of `start` when running in a pure local-editing mode.
+     */
+    async startLocal(): Promise<void> {
+        if (this.isConnecting || this.provider) {
+            return;
+        }
+
+        this.isConnecting = true;
+
+        try {
+            const bridge = new LocalFsBridge();
+            const provider = await createCodeProviderClient(CodeProvider.NodeFs, {
+                providerOptions: {
+                    nodefs: { bridge },
+                },
+            });
+
+            this.provider = provider;
+            await this.createTerminalSessions(provider);
+        } catch (error) {
+            console.error('Failed to start local NodeFs session:', error);
+            this.provider = null;
+            throw error;
+        } finally {
             this.isConnecting = false;
         }
     }
 
-    async restartProvider(sandboxId: string, userId?: string) {
-        if (!this.provider) {
-            return;
+    async restartProvider() {
+        if (this.provider) {
+            await this.provider.destroy();
+            this.provider = null;
         }
-        await this.provider.destroy();
-        this.provider = null;
-        await this.start(sandboxId, userId);
+        await this.startLocal();
     }
 
     async ping() {

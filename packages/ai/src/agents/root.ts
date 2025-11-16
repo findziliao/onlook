@@ -46,6 +46,28 @@ export const createRootAgentStream = ({
     });
 }
 
+function resolveOpenRouterModel(envVarName: string, fallback: OPENROUTER_MODELS): OPENROUTER_MODELS {
+    const value = typeof process !== 'undefined' ? process.env[envVarName] : undefined;
+    if (!value) {
+        return fallback;
+    }
+
+    // 允许任意自定义模型 ID（例如 qwen、kimi 等），直接交给 OpenRouter 处理。
+    return value as OPENROUTER_MODELS;
+}
+
+const DEFAULT_MODEL_CREATE = OPENROUTER_MODELS.OPEN_AI_GPT_5;
+const DEFAULT_MODEL_FIX = OPENROUTER_MODELS.OPEN_AI_GPT_5;
+const DEFAULT_MODEL_ASK = OPENROUTER_MODELS.CLAUDE_4_5_SONNET;
+const DEFAULT_MODEL_EDIT = OPENROUTER_MODELS.CLAUDE_4_5_SONNET;
+const DEFAULT_MODEL_REPAIR = OPENROUTER_MODELS.OPEN_AI_GPT_5_NANO;
+
+const CONFIG_MODEL_CREATE = resolveOpenRouterModel('OPENROUTER_MODEL_CREATE', DEFAULT_MODEL_CREATE);
+const CONFIG_MODEL_FIX = resolveOpenRouterModel('OPENROUTER_MODEL_FIX', DEFAULT_MODEL_FIX);
+const CONFIG_MODEL_ASK = resolveOpenRouterModel('OPENROUTER_MODEL_ASK', DEFAULT_MODEL_ASK);
+const CONFIG_MODEL_EDIT = resolveOpenRouterModel('OPENROUTER_MODEL_EDIT', DEFAULT_MODEL_EDIT);
+const CONFIG_MODEL_REPAIR = resolveOpenRouterModel('OPENROUTER_MODEL_REPAIR', DEFAULT_MODEL_REPAIR);
+
 const getSystemPromptFromType = (chatType: ChatType): string => {
     switch (chatType) {
         case ChatType.CREATE:
@@ -64,14 +86,14 @@ const getModelFromType = (chatType: ChatType): ModelConfig => {
         case ChatType.FIX:
             return initModel({
                 provider: LLMProvider.OPENROUTER,
-                model: OPENROUTER_MODELS.OPEN_AI_GPT_5,
+                model: chatType === ChatType.CREATE ? CONFIG_MODEL_CREATE : CONFIG_MODEL_FIX,
             });
         case ChatType.ASK:
         case ChatType.EDIT:
         default:
             return initModel({
                 provider: LLMProvider.OPENROUTER,
-                model: OPENROUTER_MODELS.CLAUDE_4_5_SONNET,
+                model: chatType === ChatType.ASK ? CONFIG_MODEL_ASK : CONFIG_MODEL_EDIT,
             });
     }
 }
@@ -93,7 +115,7 @@ export const repairToolCall = async ({ toolCall, tools, error }: { toolCall: Too
 
     const { model } = initModel({
         provider: LLMProvider.OPENROUTER,
-        model: OPENROUTER_MODELS.OPEN_AI_GPT_5_NANO,
+        model: CONFIG_MODEL_REPAIR,
     });
 
     const { object: repairedArgs } = await generateObject({
