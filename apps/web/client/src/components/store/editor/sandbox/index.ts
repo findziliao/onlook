@@ -37,6 +37,12 @@ export class SandboxManager {
     }
 
     async init() {
+        // 仅在浏览器环境中初始化 sandbox/session，同步引擎依赖于
+        // fetch('/api/local-fs') 等浏览器特有行为。
+        if (typeof window === 'undefined') {
+            return;
+        }
+
         // Start local NodeFs session asynchronously (don't wait)
         if (!this.session.provider) {
             this.session.startLocal().catch((err) => {

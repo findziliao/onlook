@@ -27,7 +27,7 @@ export class ReadFileTool extends ClientTool {
             .describe(
                 'The number of lines to read. Only provide if the file is too large to read at once.',
             ),
-        branchId: BRANCH_ID_SCHEMA,
+        branchId: BRANCH_ID_SCHEMA.optional(),
     });
     static readonly icon = Icons.EyeOpen;
 
@@ -36,7 +36,8 @@ export class ReadFileTool extends ClientTool {
         lines: number;
     }> {
         try {
-            const fileSystem = await getFileSystem(args.branchId, editorEngine);
+            const branchId = args.branchId ?? 'local-branch';
+            const fileSystem = await getFileSystem(branchId, editorEngine);
             let file = await fileSystem.readFile(args.file_path);
             if (typeof file !== 'string') {
                 throw new Error(`Cannot read file ${args.file_path}: file is not text`);

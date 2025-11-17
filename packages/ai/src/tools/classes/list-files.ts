@@ -29,7 +29,7 @@ export class ListFilesTool extends ClientTool {
             .array(z.string())
             .optional()
             .describe('Array of glob patterns to ignore (e.g., ["node_modules", "*.log", ".git"])'),
-        branchId: BRANCH_ID_SCHEMA,
+        branchId: BRANCH_ID_SCHEMA.optional(),
     });
     static readonly icon = Icons.ListBullet;
 
@@ -37,9 +37,10 @@ export class ListFilesTool extends ClientTool {
         args: z.infer<typeof ListFilesTool.parameters>,
         editorEngine: EditorEngine,
     ): Promise<{ path: string; type: 'file' | 'directory'; size?: number; modified?: string }[]> {
-        const sandbox = editorEngine.branches.getSandboxById(args.branchId);
+        const branchId = args.branchId ?? 'local-branch';
+        const sandbox = editorEngine.branches.getSandboxById(branchId);
         if (!sandbox) {
-            throw new Error(`Sandbox not found for branch ID: ${args.branchId}`);
+            throw new Error(`Sandbox not found for branch ID: ${branchId}`);
         }
 
         try {

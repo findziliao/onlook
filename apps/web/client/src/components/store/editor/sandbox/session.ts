@@ -146,6 +146,12 @@ export class SessionManager {
         this.isConnecting = true;
 
         try {
+            // 在服务端渲染环境中跳过本地会话初始化，避免在 Node 中使用
+            // 浏览器特有的 API（如 fetch('/api/local-fs')、xterm 等）。
+            if (typeof window === 'undefined') {
+                return;
+            }
+
             const bridge = new LocalFsBridge();
             const provider = await createCodeProviderClient(CodeProvider.NodeFs, {
                 providerOptions: {
@@ -154,7 +160,8 @@ export class SessionManager {
             });
 
             this.provider = provider;
-            await this.createTerminalSessions(provider);
+            // 在本地-only 模式下暂时不初始化 xterm 终端，避免在不同运行时加载
+            // 终端库导致的 self/window 相关错误。命令执行仍通过 runCommand 使用 provider。
         } catch (error) {
             console.error('Failed to start local NodeFs session:', error);
             this.provider = null;

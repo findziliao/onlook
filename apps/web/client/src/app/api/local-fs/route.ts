@@ -11,21 +11,6 @@ import type {
 import type { SandboxFile } from '@onlook/models/src/sandbox';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import { z } from 'zod';
-
-const requestSchema = z.object({
-    action: z.enum([
-        'readFile',
-        'writeFile',
-        'listFiles',
-        'deleteFiles',
-        'createDirectory',
-        'renameFile',
-        'statFile',
-        'copyFiles',
-    ]),
-    args: z.record(z.unknown()).optional(),
-});
 
 function getBaseDir(): string {
     const baseDir = env.LOCAL_FS_ROOT;
@@ -49,8 +34,30 @@ function resolveSafePath(relativePath: string): string {
 
 export async function POST(request: Request): Promise<Response> {
     try {
-        const json = await request.json();
-        const { action, args } = requestSchema.parse(json);
+        const json = await request.json().catch(() => ({}));
+        const { action, args } = (json ?? {}) as {
+            action?: string;
+            args?: Record<string, unknown>;
+        };
+
+        if (
+            !action ||
+            ![
+                'readFile',
+                'writeFile',
+                'listFiles',
+                'deleteFiles',
+                'createDirectory',
+                'renameFile',
+                'statFile',
+                'copyFiles',
+            ].includes(action)
+        ) {
+            return new Response(JSON.stringify({ error: 'Invalid or missing action' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
 
         switch (action) {
             case 'readFile':
@@ -145,14 +152,22 @@ async function handleWriteFile(args: WriteFileInput['args']): Promise<void> {
 async function handleListFiles(args: ListFilesInput['args']) {
     const dirPath = resolveSafePath(args.path);
 
-    const entries = await fs.readdir(dirPath, { withFileTypes: true });
-    return {
-        files: entries.map((entry) => ({
-            name: entry.name,
-            type: entry.isDirectory() ? 'directory' : 'file',
-            isSymlink: entry.isSymbolicLink(),
-        })),
-    };
+    try {
+        const entries = await fs.readdir(dirPath, { withFileTypes: true });
+        return {
+            files: entries.map((entry) => ({
+                name: entry.name,
+                type: entry.isDirectory() ? 'directory' : 'file',
+                isSymlink: entry.isSymbolicLink(),
+            })),
+        };
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            // Directory does not exist yet – treat as empty.
+            return { files: [] };
+        }
+        throw error;
+    }
 }
 
 async function handleDeleteFiles(args: DeleteFilesInput['args']): Promise<void> {
@@ -233,4 +248,3 @@ async function copyFile(sourcePath: string, targetPath: string, overwrite: boole
     const buffer = await fs.readFile(sourcePath);
     await fs.writeFile(targetPath, buffer);
 }
-

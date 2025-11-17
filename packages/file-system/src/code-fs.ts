@@ -236,7 +236,8 @@ export class CodeFileSystem extends FileSystem {
 
     private async saveIndex(index: Record<string, JsxElementMetadata>): Promise<void> {
         saveIndexToCache(this.getCacheKey(), index);
-        void this.debouncedSaveIndexToFile();
+        // 在本地-only 模式下，索引可以只保存在内存中，不必写入虚拟文件系统，
+        // 以避免在 FS 尚未完全初始化时触发写入错误。
     }
 
     private async undobounceSaveIndexToFile(): Promise<void> {
